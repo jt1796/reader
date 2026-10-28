@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Open book pedestal base below Sigma -->
+    <!-- Book Shadow -->
+    <path
+        android:fillColor="#44000000"
+        android:pathData="M31,79 C42,76.5 49,77.5 54,79.5 C59,77.5 66,76.5 77,79 L77,82.5 C66,80 59,81 54,83 C49,81 42,80 31,82.5 Z" />
+
+    <!-- Open Book Pages -->
+    <path
+        android:fillColor="#8D5B32"
+        android:pathData="M32,77 C42,74.5 49,75.5 54,77.5 C59,75.5 66,74.5 76,77 L76,80 C66,77.5 59,78.5 54,80.5 C49,78.5 42,77.5 32,80 Z" />
+
+    <path
+        android:fillColor="#D8BE9A"
+        android:pathData="M33,76.5 C42,74.2 49,75.2 54,77 C59,75.2 66,74.2 75,76.5 L75,78 C66,75.7 59,76.7 54,78.5 C49,76.7 42,75.7 33,78 Z" />
+
+    <!-- Greek Capital Sigma Shadow (Drop shadow) -->
+    <path
+        android:fillColor="#55000000"
+        android:pathData="M35.28,74.5 V70.83 L48.56,51.76 L36.06,32.04 V28.5 H70.65 L70.98,40.81 H66.92 L66.34,37.0 Q66.02,34.88 64.76,33.65 Q63.5,32.43 60.6,32.43 H47.4 L57.25,48.73 V49.7 L45.79,66.64 H62.02 Q65.05,66.64 66.4,65.03 Q67.75,63.42 68.14,60.78 L68.46,58.59 H72.72 L71.81,74.5 Z" />
+
+    <!-- Mathematical Greek Capital Sigma (Noto Serif Bold glyph) in Academic Gold -->
+    <path
+        android:fillColor="#E5A93C"
+        android:pathData="M35.28,73.0 V69.33 L48.56,50.26 L36.06,30.54 V27.0 H70.65 L70.98,39.31 H66.92 L66.34,35.5 Q66.02,33.38 64.76,32.15 Q63.5,30.93 60.6,30.93 H47.4 L57.25,47.23 V48.2 L45.79,65.14 H62.02 Q65.05,65.14 66.4,63.53 Q67.75,61.92 68.14,59.28 L68.46,57.09 H72.72 L71.81,73.0 Z" />
+
+    <!-- Top and central bevel highlight -->
+    <path
+        android:fillColor="#FFDE8A"
+        android:pathData="M35.28,27.0 H70.65 L70.85,33.0 H69.0 L68.5,30.5 H47.4 L57.25,47.23 L55.5,47.23 L44.0,30.0 H35.28 Z" />
+
+</vector>
