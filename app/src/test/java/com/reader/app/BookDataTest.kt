@@ -130,4 +130,35 @@ class BookDataTest {
         assertEquals(100, singlePage.progressPercentage)
         assertEquals("Page 1 of 1", singlePage.progressString)
     }
+
+    @Test
+    fun testMultiPanePositionsSerialization() {
+        val gson = Gson()
+        val mathBook = Book(
+            id = "math-textbook-1",
+            title = "Linear Algebra and Its Applications",
+            fileName = "linear_algebra.pdf",
+            filePath = "/books/la.pdf",
+            coverPath = "/covers/la.png",
+            pageCount = 600,
+            currentPage = 142, // Main chapter
+            pane2Page = 188,   // End of chapter problems
+            pane3Page = 572,   // Solutions appendix
+            isPane2Open = true,
+            isPane3Open = true,
+            splitRatioPrimary = 0.55f,
+            splitRatioSecondary = 0.45f
+        )
+
+        val json = gson.toJson(mathBook)
+        val deserialized = gson.fromJson(json, Book::class.java)
+
+        assertEquals(142, deserialized.currentPage)
+        assertEquals(188, deserialized.pane2Page)
+        assertEquals(572, deserialized.pane3Page)
+        assertEquals(true, deserialized.isPane2Open)
+        assertEquals(true, deserialized.isPane3Open)
+        assertEquals(0.55f, deserialized.splitRatioPrimary, 0.001f)
+        assertEquals(0.45f, deserialized.splitRatioSecondary, 0.001f)
+    }
 }

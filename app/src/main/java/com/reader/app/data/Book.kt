@@ -16,7 +16,16 @@ data class Book(
     val scrollOffset: Float = 0f,
     val lastReadTimestamp: Long = System.currentTimeMillis(),
     val fileSizeBytes: Long = 0L,
-    val addedTimestamp: Long = System.currentTimeMillis()
+    val addedTimestamp: Long = System.currentTimeMillis(),
+    // Multi-pane state for textbooks
+    val pane2Page: Int = 0,
+    val pane3Page: Int = 0,
+    val isPane2Open: Boolean = false,
+    val isPane3Open: Boolean = false,
+    val splitRatioPrimary: Float = 0.5f,
+    val splitRatioSecondary: Float = 0.5f,
+    val portraitSplitRatio1: Float = 0.33f,
+    val portraitSplitRatio2: Float = 0.66f
 ) {
     /**
      * Reading progress as a fraction between 0.0 and 1.0.

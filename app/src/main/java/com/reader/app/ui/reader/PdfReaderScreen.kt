@@ -1,12 +1,8 @@
 package com.reader.app.ui.reader
 
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -18,36 +14,32 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.ZoomIn
-import androidx.compose.material.icons.filled.ZoomOut
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Splitscreen
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -56,18 +48,15 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -77,7 +66,6 @@ import com.reader.app.data.BookRepository
 import com.reader.app.pdf.PdfManager
 import com.reader.app.ui.theme.AccentGold
 import com.reader.app.ui.theme.ShelfWoodDark
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -90,20 +78,30 @@ fun PdfReaderScreen(
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
-    val density = LocalDensity.current
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    // Initialize PdfManager
+    // Initialize PdfManager (thread-safe for concurrent page rendering across panes)
     val pdfFile = remember(book.filePath) { File(book.filePath) }
     val pdfManager = remember(pdfFile) { PdfManager(pdfFile) }
 
     var isReady by remember { mutableStateOf(false) }
     var totalPages by remember { mutableIntStateOf(book.pageCount) }
-    var showControls by remember { mutableStateOf(true) }
 
-    // Start at last read page!
-    val initialPage = remember {
-        book.currentPage.coerceIn(0, (book.pageCount - 1).coerceAtLeast(0))
-    }
+    // Multi-pane state
+    var isPane2Open by remember { mutableStateOf(book.isPane2Open) }
+    var isPane3Open by remember { mutableStateOf(book.isPane3Open) }
+
+    // Independent page positions per pane
+    var pane1Page by remember { mutableIntStateOf(book.currentPage) }
+    var pane2Page by remember { mutableIntStateOf(book.pane2Page) }
+    var pane3Page by remember { mutableIntStateOf(book.pane3Page) }
+
+    // Draggable split ratios
+    var splitRatioPrimary by remember { mutableFloatStateOf(book.splitRatioPrimary.coerceIn(0.2f, 0.8f)) }
+    var splitRatioSecondary by remember { mutableFloatStateOf(book.splitRatioSecondary.coerceIn(0.2f, 0.8f)) }
+    var portraitRatio1 by remember { mutableFloatStateOf(book.portraitSplitRatio1.coerceIn(0.15f, 0.5f)) }
+    var portraitRatio2 by remember { mutableFloatStateOf(book.portraitSplitRatio2.coerceIn(0.5f, 0.85f)) }
 
     DisposableEffect(pdfManager) {
         val opened = pdfManager.open()
@@ -113,6 +111,24 @@ fun PdfReaderScreen(
         }
         onDispose {
             pdfManager.close()
+        }
+    }
+
+    // Save all positions on system back press
+    BackHandler {
+        scope.launch {
+            repository.updatePaneProgress(book.id, 1, pane1Page)
+            repository.updatePaneProgress(book.id, 2, pane2Page)
+            repository.updatePaneProgress(book.id, 3, pane3Page)
+            repository.updatePaneState(book.id, isPane2Open, isPane3Open)
+            repository.updateSplitRatios(
+                bookId = book.id,
+                splitRatioPrimary = splitRatioPrimary,
+                splitRatioSecondary = splitRatioSecondary,
+                portraitSplitRatio1 = portraitRatio1,
+                portraitSplitRatio2 = portraitRatio2
+            )
+            onBack()
         }
     }
 
@@ -132,216 +148,518 @@ fun PdfReaderScreen(
         return
     }
 
-    val pagerState = rememberPagerState(
-        initialPage = initialPage,
-        pageCount = { totalPages }
-    )
-
-    // ALWAYS REMEMBER POSITION:
-    // Whenever currentPage changes in the pager, save immediately to repository!
-    LaunchedEffect(pagerState) {
-        snapshotFlow { pagerState.currentPage }
-            .distinctUntilChanged()
-            .collect { page ->
-                repository.updateBookProgress(book.id, page)
-            }
-    }
-
-    // Save position also on back press
-    BackHandler {
-        scope.launch {
-            repository.updateBookProgress(book.id, pagerState.currentPage)
-            onBack()
-        }
-    }
-
-    Box(
+    Column(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFF121212))
     ) {
-        // Horizontal Pager for PDF Pages
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onTap = {
-                            // Tap toggles the controls overlay
-                            showControls = !showControls
-                        }
-                    )
-                },
-            beyondViewportPageCount = 1
-        ) { pageIndex ->
-            PdfPageView(
-                pdfManager = pdfManager,
-                pageIndex = pageIndex,
-                onTap = { showControls = !showControls }
-            )
-        }
-
         // Top Navigation Bar
-        AnimatedVisibility(
-            visible = showControls,
-            enter = fadeIn() + slideInVertically { -it },
-            exit = fadeOut() + slideOutVertically { -it },
-            modifier = Modifier.align(Alignment.TopCenter)
+        Surface(
+            color = ShelfWoodDark,
+            shadowElevation = 6.dp,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Surface(
-                color = ShelfWoodDark.copy(alpha = 0.95f),
-                shadowElevation = 8.dp,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                TopAppBar(
-                    title = {
-                        Column {
-                            Text(
-                                text = book.title,
-                                color = Color.White,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = "Page ${pagerState.currentPage + 1} of $totalPages (${((pagerState.currentPage + 1).toFloat() / totalPages * 100).toInt()}%)",
-                                color = AccentGold,
-                                fontSize = 12.sp
-                            )
-                        }
-                    },
-                    navigationIcon = {
-                        IconButton(
-                            onClick = {
-                                scope.launch {
-                                    repository.updateBookProgress(book.id, pagerState.currentPage)
-                                    onBack()
-                                }
-                            }
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
-                                tint = Color.White
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent
-                    )
-                )
-            }
-        }
-
-        // Bottom Controls Bar with Slider & Jump Controls
-        AnimatedVisibility(
-            visible = showControls,
-            enter = fadeIn() + slideInVertically { it },
-            exit = fadeOut() + slideOutVertically { it },
-            modifier = Modifier.align(Alignment.BottomCenter)
-        ) {
-            Surface(
-                color = ShelfWoodDark.copy(alpha = 0.95f),
-                shadowElevation = 12.dp,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    // Page Progress text
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+            TopAppBar(
+                title = {
+                    Column {
                         Text(
-                            text = "Page 1",
-                            color = Color(0xFFAAAAAA),
-                            fontSize = 11.sp
+                            text = book.title,
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "${pagerState.currentPage + 1} / $totalPages",
+                            text = if (isPane2Open && isPane3Open) "3 Views Active"
+                            else if (isPane2Open || isPane3Open) "2 Views Active"
+                            else "Page ${pane1Page + 1} of $totalPages",
                             color = AccentGold,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Page $totalPages",
-                            color = Color(0xFFAAAAAA),
                             fontSize = 11.sp
                         )
                     }
-
-                    // Scrubber Slider
-                    Slider(
-                        value = (pagerState.currentPage + 1).toFloat(),
-                        onValueChange = { targetPageFloat ->
-                            val targetIndex = (targetPageFloat.toInt() - 1).coerceIn(0, totalPages - 1)
+                },
+                navigationIcon = {
+                    IconButton(
+                        onClick = {
                             scope.launch {
-                                pagerState.scrollToPage(targetIndex)
+                                repository.updatePaneProgress(book.id, 1, pane1Page)
+                                repository.updatePaneProgress(book.id, 2, pane2Page)
+                                repository.updatePaneProgress(book.id, 3, pane3Page)
+                                repository.updatePaneState(book.id, isPane2Open, isPane3Open)
+                                onBack()
+                            }
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back to Bookshelf",
+                            tint = Color.White
+                        )
+                    }
+                },
+                actions = {
+                    // Toggle 2nd View Chip
+                    FilterChip(
+                        selected = isPane2Open,
+                        onClick = {
+                            val newOpen = !isPane2Open
+                            isPane2Open = newOpen
+                            scope.launch {
+                                repository.updatePaneState(book.id, newOpen, isPane3Open)
                             }
                         },
-                        valueRange = 1f..totalPages.toFloat().coerceAtLeast(1f),
-                        steps = if (totalPages > 2) totalPages - 2 else 0,
-                        colors = SliderDefaults.colors(
-                            thumbColor = AccentGold,
-                            activeTrackColor = AccentGold,
-                            inactiveTrackColor = Color(0x44FFFFFF)
+                        label = {
+                            Text(
+                                text = if (isPane2Open) "2nd View" else "+ 2nd View",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        },
+                        leadingIcon = if (isPane2Open) {
+                            {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        } else null,
+                        colors = FilterChipDefaults.filterChipColors(
+                            containerColor = Color(0x33FFFFFF),
+                            labelColor = Color(0xFFDDD2C6),
+                            selectedContainerColor = Color(0xFF2962FF),
+                            selectedLabelColor = Color.White
                         ),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.padding(end = 4.dp)
                     )
 
-                    // Previous / Next Buttons
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(
-                            onClick = {
-                                if (pagerState.currentPage > 0) {
-                                    scope.launch {
-                                        pagerState.animateScrollToPage(pagerState.currentPage - 1)
-                                    }
-                                }
-                            },
-                            enabled = pagerState.currentPage > 0
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ChevronLeft,
-                                contentDescription = "Previous Page",
-                                tint = if (pagerState.currentPage > 0) Color.White else Color(0x44FFFFFF),
-                                modifier = Modifier.size(32.dp)
+                    // Toggle 3rd View Chip
+                    FilterChip(
+                        selected = isPane3Open,
+                        onClick = {
+                            val newOpen = !isPane3Open
+                            isPane3Open = newOpen
+                            scope.launch {
+                                repository.updatePaneState(book.id, isPane2Open, newOpen)
+                            }
+                        },
+                        label = {
+                            Text(
+                                text = if (isPane3Open) "3rd View" else "+ 3rd View",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
                             )
+                        },
+                        leadingIcon = if (isPane3Open) {
+                            {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        } else null,
+                        colors = FilterChipDefaults.filterChipColors(
+                            containerColor = Color(0x33FFFFFF),
+                            labelColor = Color(0xFFDDD2C6),
+                            selectedContainerColor = Color(0xFF2E7D32),
+                            selectedLabelColor = Color.White
+                        ),
+                        modifier = Modifier.padding(end = 6.dp)
+                    )
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent
+                )
+            )
+        }
+
+        // Multi-Pane Content Area
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        ) {
+            val totalWidthPx = constraints.maxWidth.toFloat().coerceAtLeast(1f)
+            val totalHeightPx = constraints.maxHeight.toFloat().coerceAtLeast(1f)
+
+            val hasPane2 = isPane2Open
+            val hasPane3 = isPane3Open
+
+            when {
+                // -------------------------------------------------------------
+                // CASE 1: Only 1 View (Standard Single Page View)
+                // -------------------------------------------------------------
+                !hasPane2 && !hasPane3 -> {
+                    PdfPaneView(
+                        paneIndex = 1,
+                        paneTitle = "Main Text",
+                        initialPage = pane1Page,
+                        totalPages = totalPages,
+                        pdfManager = pdfManager,
+                        canClose = false,
+                        onPageChanged = { page ->
+                            pane1Page = page
+                            scope.launch { repository.updatePaneProgress(book.id, 1, page) }
                         }
+                    )
+                }
 
-                        Text(
-                            text = "Swipe horizontally to turn pages",
-                            color = Color(0xFF888888),
-                            fontSize = 11.sp
-                        )
+                // -------------------------------------------------------------
+                // CASE 2: 2 Views (Pane 1 + Pane 2, or Pane 1 + Pane 3)
+                // -------------------------------------------------------------
+                (hasPane2 && !hasPane3) || (!hasPane2 && hasPane3) -> {
+                    val secondaryIndex = if (hasPane2) 2 else 3
+                    val secondaryTitle = if (hasPane2) "2nd View - Exercises" else "3rd View - Solutions"
+                    val secondaryPage = if (hasPane2) pane2Page else pane3Page
 
-                        IconButton(
-                            onClick = {
-                                if (pagerState.currentPage < totalPages - 1) {
+                    if (isLandscape) {
+                        // Landscape: One tall view on the left, 2nd view on the right
+                        Row(modifier = Modifier.fillMaxSize()) {
+                            // Left: Pane 1
+                            Box(
+                                modifier = Modifier
+                                    .weight(splitRatioPrimary)
+                                    .fillMaxHeight()
+                            ) {
+                                PdfPaneView(
+                                    paneIndex = 1,
+                                    paneTitle = "Main Text",
+                                    initialPage = pane1Page,
+                                    totalPages = totalPages,
+                                    pdfManager = pdfManager,
+                                    canClose = false,
+                                    onPageChanged = { page ->
+                                        pane1Page = page
+                                        scope.launch { repository.updatePaneProgress(book.id, 1, page) }
+                                    }
+                                )
+                            }
+
+                            // Draggable Vertical Divider
+                            DraggableVerticalDivider(
+                                onDragDelta = { dx ->
+                                    val deltaFraction = dx / totalWidthPx
+                                    splitRatioPrimary = (splitRatioPrimary + deltaFraction).coerceIn(0.2f, 0.8f)
+                                },
+                                onDragEnd = {
                                     scope.launch {
-                                        pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                                        repository.updateSplitRatios(book.id, splitRatioPrimary = splitRatioPrimary)
                                     }
                                 }
-                            },
-                            enabled = pagerState.currentPage < totalPages - 1
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ChevronRight,
-                                contentDescription = "Next Page",
-                                tint = if (pagerState.currentPage < totalPages - 1) Color.White else Color(0x44FFFFFF),
-                                modifier = Modifier.size(32.dp)
                             )
+
+                            // Right: Secondary Pane
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f - splitRatioPrimary)
+                                    .fillMaxHeight()
+                            ) {
+                                PdfPaneView(
+                                    paneIndex = secondaryIndex,
+                                    paneTitle = secondaryTitle,
+                                    initialPage = secondaryPage,
+                                    totalPages = totalPages,
+                                    pdfManager = pdfManager,
+                                    canClose = true,
+                                    onClose = {
+                                        if (secondaryIndex == 2) isPane2Open = false else isPane3Open = false
+                                        scope.launch {
+                                            repository.updatePaneState(book.id, isPane2Open, isPane3Open)
+                                        }
+                                    },
+                                    onPageChanged = { page ->
+                                        if (secondaryIndex == 2) pane2Page = page else pane3Page = page
+                                        scope.launch { repository.updatePaneProgress(book.id, secondaryIndex, page) }
+                                    }
+                                )
+                            }
+                        }
+                    } else {
+                        // Portrait: Stacked on top of each other
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            // Top: Pane 1
+                            Box(
+                                modifier = Modifier
+                                    .weight(splitRatioPrimary)
+                                    .fillMaxWidth()
+                            ) {
+                                PdfPaneView(
+                                    paneIndex = 1,
+                                    paneTitle = "Main Text",
+                                    initialPage = pane1Page,
+                                    totalPages = totalPages,
+                                    pdfManager = pdfManager,
+                                    canClose = false,
+                                    onPageChanged = { page ->
+                                        pane1Page = page
+                                        scope.launch { repository.updatePaneProgress(book.id, 1, page) }
+                                    }
+                                )
+                            }
+
+                            // Draggable Horizontal Divider
+                            DraggableHorizontalDivider(
+                                onDragDelta = { dy ->
+                                    val deltaFraction = dy / totalHeightPx
+                                    splitRatioPrimary = (splitRatioPrimary + deltaFraction).coerceIn(0.2f, 0.8f)
+                                },
+                                onDragEnd = {
+                                    scope.launch {
+                                        repository.updateSplitRatios(book.id, splitRatioPrimary = splitRatioPrimary)
+                                    }
+                                }
+                            )
+
+                            // Bottom: Secondary Pane
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f - splitRatioPrimary)
+                                    .fillMaxWidth()
+                            ) {
+                                PdfPaneView(
+                                    paneIndex = secondaryIndex,
+                                    paneTitle = secondaryTitle,
+                                    initialPage = secondaryPage,
+                                    totalPages = totalPages,
+                                    pdfManager = pdfManager,
+                                    canClose = true,
+                                    onClose = {
+                                        if (secondaryIndex == 2) isPane2Open = false else isPane3Open = false
+                                        scope.launch {
+                                            repository.updatePaneState(book.id, isPane2Open, isPane3Open)
+                                        }
+                                    },
+                                    onPageChanged = { page ->
+                                        if (secondaryIndex == 2) pane2Page = page else pane3Page = page
+                                        scope.launch { repository.updatePaneProgress(book.id, secondaryIndex, page) }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // -------------------------------------------------------------
+                // CASE 3: All 3 Views Active (Pane 1 + Pane 2 + Pane 3)
+                // -------------------------------------------------------------
+                else -> {
+                    if (isLandscape) {
+                        // Landscape: One tall view on the left, 2nd view on right top, 3rd view beneath 2nd view
+                        Row(modifier = Modifier.fillMaxSize()) {
+                            // Left: Tall Pane 1
+                            Box(
+                                modifier = Modifier
+                                    .weight(splitRatioPrimary)
+                                    .fillMaxHeight()
+                            ) {
+                                PdfPaneView(
+                                    paneIndex = 1,
+                                    paneTitle = "Main Text",
+                                    initialPage = pane1Page,
+                                    totalPages = totalPages,
+                                    pdfManager = pdfManager,
+                                    canClose = false,
+                                    onPageChanged = { page ->
+                                        pane1Page = page
+                                        scope.launch { repository.updatePaneProgress(book.id, 1, page) }
+                                    }
+                                )
+                            }
+
+                            // Draggable Vertical Divider between Left and Right
+                            DraggableVerticalDivider(
+                                onDragDelta = { dx ->
+                                    val deltaFraction = dx / totalWidthPx
+                                    splitRatioPrimary = (splitRatioPrimary + deltaFraction).coerceIn(0.2f, 0.8f)
+                                },
+                                onDragEnd = {
+                                    scope.launch {
+                                        repository.updateSplitRatios(book.id, splitRatioPrimary = splitRatioPrimary)
+                                    }
+                                }
+                            )
+
+                            // Right column: Pane 2 on top, Pane 3 beneath it
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f - splitRatioPrimary)
+                                    .fillMaxHeight()
+                            ) {
+                                // Top right: Pane 2
+                                Box(
+                                    modifier = Modifier
+                                        .weight(splitRatioSecondary)
+                                        .fillMaxWidth()
+                                ) {
+                                    PdfPaneView(
+                                        paneIndex = 2,
+                                        paneTitle = "2nd View - Exercises",
+                                        initialPage = pane2Page,
+                                        totalPages = totalPages,
+                                        pdfManager = pdfManager,
+                                        canClose = true,
+                                        onClose = {
+                                            isPane2Open = false
+                                            scope.launch {
+                                                repository.updatePaneState(book.id, isPane2Open = false, isPane3Open = true)
+                                            }
+                                        },
+                                        onPageChanged = { page ->
+                                            pane2Page = page
+                                            scope.launch { repository.updatePaneProgress(book.id, 2, page) }
+                                        }
+                                    )
+                                }
+
+                                // Draggable Horizontal Divider between Pane 2 & 3
+                                DraggableHorizontalDivider(
+                                    onDragDelta = { dy ->
+                                        val deltaFraction = dy / totalHeightPx
+                                        splitRatioSecondary = (splitRatioSecondary + deltaFraction).coerceIn(0.2f, 0.8f)
+                                    },
+                                    onDragEnd = {
+                                        scope.launch {
+                                            repository.updateSplitRatios(book.id, splitRatioSecondary = splitRatioSecondary)
+                                        }
+                                    }
+                                )
+
+                                // Bottom right: Pane 3
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f - splitRatioSecondary)
+                                        .fillMaxWidth()
+                                ) {
+                                    PdfPaneView(
+                                        paneIndex = 3,
+                                        paneTitle = "3rd View - Solutions",
+                                        initialPage = pane3Page,
+                                        totalPages = totalPages,
+                                        pdfManager = pdfManager,
+                                        canClose = true,
+                                        onClose = {
+                                            isPane3Open = false
+                                            scope.launch {
+                                                repository.updatePaneState(book.id, isPane2Open = true, isPane3Open = false)
+                                            }
+                                        },
+                                        onPageChanged = { page ->
+                                            pane3Page = page
+                                            scope.launch { repository.updatePaneProgress(book.id, 3, page) }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        // Portrait: Stacked on top of each other!
+                        // Top: Pane 1, Middle: Pane 2, Bottom: Pane 3
+                        val weight1 = portraitRatio1.coerceIn(0.15f, 0.5f)
+                        val weight2 = (portraitRatio2 - portraitRatio1).coerceIn(0.15f, 0.5f)
+                        val weight3 = (1f - portraitRatio2).coerceIn(0.15f, 0.5f)
+
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            // Top: Pane 1
+                            Box(
+                                modifier = Modifier
+                                    .weight(weight1)
+                                    .fillMaxWidth()
+                            ) {
+                                PdfPaneView(
+                                    paneIndex = 1,
+                                    paneTitle = "Main Text",
+                                    initialPage = pane1Page,
+                                    totalPages = totalPages,
+                                    pdfManager = pdfManager,
+                                    canClose = false,
+                                    onPageChanged = { page ->
+                                        pane1Page = page
+                                        scope.launch { repository.updatePaneProgress(book.id, 1, page) }
+                                    }
+                                )
+                            }
+
+                            // Draggable Divider 1
+                            DraggableHorizontalDivider(
+                                onDragDelta = { dy ->
+                                    val deltaFraction = dy / totalHeightPx
+                                    val newR1 = (portraitRatio1 + deltaFraction).coerceIn(0.15f, portraitRatio2 - 0.15f)
+                                    portraitRatio1 = newR1
+                                },
+                                onDragEnd = {
+                                    scope.launch {
+                                        repository.updateSplitRatios(book.id, portraitSplitRatio1 = portraitRatio1)
+                                    }
+                                }
+                            )
+
+                            // Middle: Pane 2
+                            Box(
+                                modifier = Modifier
+                                    .weight(weight2)
+                                    .fillMaxWidth()
+                            ) {
+                                PdfPaneView(
+                                    paneIndex = 2,
+                                    paneTitle = "2nd View - Exercises",
+                                    initialPage = pane2Page,
+                                    totalPages = totalPages,
+                                    pdfManager = pdfManager,
+                                    canClose = true,
+                                    onClose = {
+                                        isPane2Open = false
+                                        scope.launch {
+                                            repository.updatePaneState(book.id, isPane2Open = false, isPane3Open = true)
+                                        }
+                                    },
+                                    onPageChanged = { page ->
+                                        pane2Page = page
+                                        scope.launch { repository.updatePaneProgress(book.id, 2, page) }
+                                    }
+                                )
+                            }
+
+                            // Draggable Divider 2
+                            DraggableHorizontalDivider(
+                                onDragDelta = { dy ->
+                                    val deltaFraction = dy / totalHeightPx
+                                    val newR2 = (portraitRatio2 + deltaFraction).coerceIn(portraitRatio1 + 0.15f, 0.85f)
+                                    portraitRatio2 = newR2
+                                },
+                                onDragEnd = {
+                                    scope.launch {
+                                        repository.updateSplitRatios(book.id, portraitSplitRatio2 = portraitRatio2)
+                                    }
+                                }
+                            )
+
+                            // Bottom: Pane 3
+                            Box(
+                                modifier = Modifier
+                                    .weight(weight3)
+                                    .fillMaxWidth()
+                            ) {
+                                PdfPaneView(
+                                    paneIndex = 3,
+                                    paneTitle = "3rd View - Solutions",
+                                    initialPage = pane3Page,
+                                    totalPages = totalPages,
+                                    pdfManager = pdfManager,
+                                    canClose = true,
+                                    onClose = {
+                                        isPane3Open = false
+                                        scope.launch {
+                                            repository.updatePaneState(book.id, isPane2Open = true, isPane3Open = false)
+                                        }
+                                    },
+                                    onPageChanged = { page ->
+                                        pane3Page = page
+                                        scope.launch { repository.updatePaneProgress(book.id, 3, page) }
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -367,7 +685,6 @@ fun PdfPageView(
         val newScale = (scale * zoomChange).coerceIn(1f, 4f)
         scale = newScale
         if (newScale > 1f) {
-            // Allow panning when zoomed in
             val maxX = (newScale - 1f) * 500f
             val maxY = (newScale - 1f) * 800f
             offset = Offset(
@@ -386,7 +703,6 @@ fun PdfPageView(
                 detectTapGestures(
                     onTap = { onTap() },
                     onDoubleTap = {
-                        // Double tap to toggle 1x / 2.5x zoom
                         if (scale > 1.2f) {
                             scale = 1f
                             offset = Offset.Zero

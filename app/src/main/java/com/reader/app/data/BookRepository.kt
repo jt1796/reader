@@ -196,6 +196,76 @@ class BookRepository(private val context: Context) {
     }
 
     /**
+     * Updates reading page for a specific pane (1, 2, or 3).
+     */
+    suspend fun updatePaneProgress(
+        bookId: String,
+        paneIndex: Int,
+        page: Int
+    ) = withContext(Dispatchers.IO) {
+        val currentList = _books.value.toMutableList()
+        val index = currentList.indexOfFirst { it.id == bookId }
+        if (index != -1) {
+            val oldBook = currentList[index]
+            val validPage = page.coerceIn(0, (oldBook.pageCount - 1).coerceAtLeast(0))
+            val updated = when (paneIndex) {
+                1 -> oldBook.copy(currentPage = validPage, lastReadTimestamp = System.currentTimeMillis())
+                2 -> oldBook.copy(pane2Page = validPage)
+                3 -> oldBook.copy(pane3Page = validPage)
+                else -> oldBook
+            }
+            currentList[index] = updated
+            saveBooks(currentList)
+        }
+    }
+
+    /**
+     * Updates open/closed visibility state for Panes 2 and 3.
+     */
+    suspend fun updatePaneState(
+        bookId: String,
+        isPane2Open: Boolean,
+        isPane3Open: Boolean
+    ) = withContext(Dispatchers.IO) {
+        val currentList = _books.value.toMutableList()
+        val index = currentList.indexOfFirst { it.id == bookId }
+        if (index != -1) {
+            val oldBook = currentList[index]
+            val updated = oldBook.copy(
+                isPane2Open = isPane2Open,
+                isPane3Open = isPane3Open
+            )
+            currentList[index] = updated
+            saveBooks(currentList)
+        }
+    }
+
+    /**
+     * Persists draggable split divider ratios.
+     */
+    suspend fun updateSplitRatios(
+        bookId: String,
+        splitRatioPrimary: Float? = null,
+        splitRatioSecondary: Float? = null,
+        portraitSplitRatio1: Float? = null,
+        portraitSplitRatio2: Float? = null
+    ) = withContext(Dispatchers.IO) {
+        val currentList = _books.value.toMutableList()
+        val index = currentList.indexOfFirst { it.id == bookId }
+        if (index != -1) {
+            val oldBook = currentList[index]
+            val updated = oldBook.copy(
+                splitRatioPrimary = splitRatioPrimary ?: oldBook.splitRatioPrimary,
+                splitRatioSecondary = splitRatioSecondary ?: oldBook.splitRatioSecondary,
+                portraitSplitRatio1 = portraitSplitRatio1 ?: oldBook.portraitSplitRatio1,
+                portraitSplitRatio2 = portraitSplitRatio2 ?: oldBook.portraitSplitRatio2
+            )
+            currentList[index] = updated
+            saveBooks(currentList)
+        }
+    }
+
+    /**
      * Deletes a book and its associated files.
      */
     suspend fun deleteBook(bookId: String) = withContext(Dispatchers.IO) {
