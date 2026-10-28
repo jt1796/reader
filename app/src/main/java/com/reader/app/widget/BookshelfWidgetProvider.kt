@@ -25,7 +25,7 @@ class BookshelfWidgetProvider : AppWidgetProvider() {
     }
 
     @Suppress("DEPRECATION")
-    private fun updateWidget(
+    internal fun updateWidget(
         context: Context,
         appWidgetManager: AppWidgetManager,
         appWidgetId: Int
@@ -89,6 +89,10 @@ class BookshelfWidgetProvider : AppWidgetProvider() {
             val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
 
             if (appWidgetIds.isNotEmpty()) {
+                val provider = BookshelfWidgetProvider()
+                for (appWidgetId in appWidgetIds) {
+                    provider.updateWidget(context, appWidgetManager, appWidgetId)
+                }
                 // Notify collection data changed
                 appWidgetManager.notifyAppWidgetViewDataChanged(
                     appWidgetIds,

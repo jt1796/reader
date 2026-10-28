@@ -36,11 +36,12 @@
     </FrameLayout>
 
     <!-- Shelf plank directly beneath the book -->
-    <View
+    <ImageView
         android:layout_width="match_parent"
         android:layout_height="8dp"
         android:layout_marginTop="1dp"
-        android:background="@drawable/widget_shelf_ledge" />
+        android:background="@drawable/widget_shelf_ledge"
+        android:contentDescription="@null" />
 
     <!-- Book Title -->
     <TextView

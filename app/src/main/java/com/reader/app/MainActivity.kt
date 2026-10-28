@@ -20,6 +20,7 @@ import com.reader.app.ui.reader.PdfReaderScreen
 import com.reader.app.ui.shelf.BookshelfScreen
 import com.reader.app.ui.theme.BookshelfBackground
 import com.reader.app.ui.theme.ReaderTheme
+import com.reader.app.widget.BookshelfWidgetProvider
 
 class MainActivity : ComponentActivity() {
 
@@ -31,6 +32,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         repository = BookRepository.getInstance(applicationContext)
+        BookshelfWidgetProvider.updateAllWidgets(applicationContext)
         handleIntent(intent)
 
         setContent {
@@ -74,6 +76,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        BookshelfWidgetProvider.updateAllWidgets(applicationContext)
     }
 
     override fun onNewIntent(intent: Intent) {
