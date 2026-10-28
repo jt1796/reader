@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Reader</string>
+    <string name="widget_name">Bookshelf Widget</string>
+    <string name="widget_description">Shows your bookshelf with book thumbnails and reading progress.</string>
+</resources>

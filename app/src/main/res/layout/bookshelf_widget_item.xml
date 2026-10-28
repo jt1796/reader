@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_item_container"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_horizontal"
+    android:orientation="vertical"
+    android:padding="2dp">
+
+    <!-- Book Thumbnail Container -->
+    <FrameLayout
+        android:layout_width="68dp"
+        android:layout_height="95dp">
+
+        <ImageView
+            android:id="@+id/widget_book_cover"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/widget_book_frame"
+            android:contentDescription="Book Cover"
+            android:scaleType="centerCrop"
+            android:src="@drawable/ic_bookshelf_widget" />
+
+        <!-- Progress overlay badge -->
+        <TextView
+            android:id="@+id/widget_book_progress"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:background="#CC1B120E"
+            android:gravity="center"
+            android:paddingVertical="2dp"
+            android:textColor="#E5A93C"
+            android:textSize="9sp"
+            android:textStyle="bold" />
+    </FrameLayout>
+
+    <!-- Shelf plank directly beneath the book -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="8dp"
+        android:layout_marginTop="1dp"
+        android:background="@drawable/widget_shelf_ledge" />
+
+    <!-- Book Title -->
+    <TextView
+        android:id="@+id/widget_book_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:ellipsize="end"
+        android:gravity="center"
+        android:maxLines="1"
+        android:textColor="#F3ECE0"
+        android:textSize="10sp" />
+
+</LinearLayout>
