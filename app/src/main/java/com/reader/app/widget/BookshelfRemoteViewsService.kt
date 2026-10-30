@@ -1,6 +1,7 @@
 package com.reader.app.widget
 
 import android.content.Context
+import android.content.res.Configuration
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -72,15 +73,41 @@ class BookshelfRemoteViewsFactory(
         if (widgetId == android.appwidget.AppWidgetManager.INVALID_APPWIDGET_ID) return 1
         val manager = android.appwidget.AppWidgetManager.getInstance(context)
         val options = manager.getAppWidgetOptions(widgetId)
-        val widthDp = options.getInt(android.appwidget.AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 180)
+        val isPortrait = context.resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+        val widthKey = if (isPortrait) {
+            android.appwidget.AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH
+        } else {
+            android.appwidget.AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH
+        }
+        val widthDp = options.getInt(widthKey, 180)
         val availableWidth = (widthDp - 16).coerceAtLeast(85)
         return (availableWidth / 85).coerceIn(1, 8)
+    }
+
+    private fun visibleRowCount(): Int {
+        if (widgetId == android.appwidget.AppWidgetManager.INVALID_APPWIDGET_ID) return 1
+        val options = android.appwidget.AppWidgetManager.getInstance(context).getAppWidgetOptions(widgetId)
+        val isPortrait = context.resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+        val heightKey = if (isPortrait) {
+            android.appwidget.AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT
+        } else {
+            android.appwidget.AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT
+        }
+        val heightDp = options.getInt(heightKey, options.getInt(
+            android.appwidget.AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT,
+            110
+        ))
+        // Each cell is about 122dp tall, with 6dp between GridView rows.
+        val gridHeight = (heightDp - 16).coerceAtLeast(1)
+        return ((gridHeight + 6) / 128).coerceAtLeast(1)
     }
 
     override fun getCount(): Int {
         if (booksList.isEmpty()) return 0
         val columns = columnCount()
-        return ((booksList.size + columns - 1) / columns) * columns
+        val bookRows = (booksList.size + columns - 1) / columns
+        val rows = maxOf(bookRows, visibleRowCount())
+        return rows * columns
     }
 
     override fun getViewAt(position: Int): RemoteViews? {
