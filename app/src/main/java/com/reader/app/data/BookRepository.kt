@@ -78,6 +78,14 @@ class BookRepository(private val context: Context) {
         return _books.value.find { it.id == id }
     }
 
+    /** Applies a metadata change against the latest list so concurrent page updates cannot overwrite each other. */
+    private inline fun updateBooks(transform: (MutableList<Book>) -> Boolean) {
+        synchronized(this) {
+            val currentList = _books.value.toMutableList()
+            if (transform(currentList)) saveBooks(currentList)
+        }
+    }
+
     /**
      * Imports a PDF from a content Uri (SAF picker), saves it to internal storage,
      * extracts cover thumbnail from page 0, and records its metadata.
@@ -180,9 +188,9 @@ class BookRepository(private val context: Context) {
         currentPage: Int,
         scrollOffset: Float = 0f
     ) = withContext(Dispatchers.IO) {
-        val currentList = _books.value.toMutableList()
-        val index = currentList.indexOfFirst { it.id == bookId }
-        if (index != -1) {
+        updateBooks { currentList ->
+            val index = currentList.indexOfFirst { it.id == bookId }
+            if (index != -1) {
             val oldBook = currentList[index]
             val validPage = currentPage.coerceIn(0, (oldBook.pageCount - 1).coerceAtLeast(0))
             val updated = oldBook.copy(
@@ -191,7 +199,8 @@ class BookRepository(private val context: Context) {
                 lastReadTimestamp = System.currentTimeMillis()
             )
             currentList[index] = updated
-            saveBooks(currentList)
+            true
+            } else false
         }
     }
 
@@ -203,9 +212,9 @@ class BookRepository(private val context: Context) {
         paneIndex: Int,
         page: Int
     ) = withContext(Dispatchers.IO) {
-        val currentList = _books.value.toMutableList()
-        val index = currentList.indexOfFirst { it.id == bookId }
-        if (index != -1) {
+        updateBooks { currentList ->
+            val index = currentList.indexOfFirst { it.id == bookId }
+            if (index != -1) {
             val oldBook = currentList[index]
             val validPage = page.coerceIn(0, (oldBook.pageCount - 1).coerceAtLeast(0))
             val updated = when (paneIndex) {
@@ -215,7 +224,8 @@ class BookRepository(private val context: Context) {
                 else -> oldBook
             }
             currentList[index] = updated
-            saveBooks(currentList)
+            true
+            } else false
         }
     }
 
@@ -227,16 +237,17 @@ class BookRepository(private val context: Context) {
         isPane2Open: Boolean,
         isPane3Open: Boolean
     ) = withContext(Dispatchers.IO) {
-        val currentList = _books.value.toMutableList()
-        val index = currentList.indexOfFirst { it.id == bookId }
-        if (index != -1) {
+        updateBooks { currentList ->
+            val index = currentList.indexOfFirst { it.id == bookId }
+            if (index != -1) {
             val oldBook = currentList[index]
             val updated = oldBook.copy(
                 isPane2Open = isPane2Open,
                 isPane3Open = isPane3Open
             )
             currentList[index] = updated
-            saveBooks(currentList)
+            true
+            } else false
         }
     }
 
@@ -250,9 +261,9 @@ class BookRepository(private val context: Context) {
         portraitSplitRatio1: Float? = null,
         portraitSplitRatio2: Float? = null
     ) = withContext(Dispatchers.IO) {
-        val currentList = _books.value.toMutableList()
-        val index = currentList.indexOfFirst { it.id == bookId }
-        if (index != -1) {
+        updateBooks { currentList ->
+            val index = currentList.indexOfFirst { it.id == bookId }
+            if (index != -1) {
             val oldBook = currentList[index]
             val updated = oldBook.copy(
                 splitRatioPrimary = splitRatioPrimary ?: oldBook.splitRatioPrimary,
@@ -261,7 +272,8 @@ class BookRepository(private val context: Context) {
                 portraitSplitRatio2 = portraitSplitRatio2 ?: oldBook.portraitSplitRatio2
             )
             currentList[index] = updated
-            saveBooks(currentList)
+            true
+            } else false
         }
     }
 

@@ -130,7 +130,7 @@ fun BookItem(
                             imageVector = Icons.Default.Book,
                             contentDescription = null,
                             tint = AccentGold,
-                            modifier = Modifier.size(36.dp)
+                            modifier = Modifier.size(28.dp)
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(

@@ -28,6 +28,19 @@ class PdfManager(private val pdfFile: File) {
             pdfRenderer?.pageCount ?: 0
         }
 
+    fun getPageAspectRatio(pageIndex: Int): Float = synchronized(lock) {
+        val renderer = pdfRenderer ?: return 1f / 1.414f
+        if (pageIndex < 0 || pageIndex >= renderer.pageCount) return 1f / 1.414f
+        try {
+            val page = renderer.openPage(pageIndex)
+            val ratio = page.width.toFloat() / page.height.toFloat()
+            page.close()
+            ratio
+        } catch (e: Exception) {
+            1f / 1.414f
+        }
+    }
+
     fun open(): Boolean {
         synchronized(lock) {
             return try {
@@ -58,14 +71,17 @@ class PdfManager(private val pdfFile: File) {
                 val originalWidth = page.width
                 val originalHeight = page.height
 
-                // Calculate scaled dimension while preserving aspect ratio
-                val scale = minOf(
-                    targetWidth.toFloat() / originalWidth,
-                    targetHeight.toFloat() / originalHeight
-                ).coerceAtLeast(1.0f)
+                val scale = if (targetHeight > 0) {
+                    minOf(
+                        targetWidth.toFloat() / originalWidth,
+                        targetHeight.toFloat() / originalHeight
+                    ).coerceAtLeast(1.0f)
+                } else {
+                    (targetWidth.toFloat() / originalWidth).coerceAtLeast(1.0f)
+                }
 
-                val renderWidth = (originalWidth * scale).toInt().coerceAtLeast(100)
-                val renderHeight = (originalHeight * scale).toInt().coerceAtLeast(100)
+                val renderWidth = (originalWidth * scale).toInt().coerceIn(100, 2400)
+                val renderHeight = (originalHeight * scale).toInt().coerceIn(100, 3600)
 
                 val bitmap = Bitmap.createBitmap(renderWidth, renderHeight, Bitmap.Config.ARGB_8888)
                 bitmap.eraseColor(android.graphics.Color.WHITE)

@@ -4,6 +4,8 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -52,6 +54,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -60,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.reader.app.data.Book
 import com.reader.app.data.BookRepository
+import com.reader.app.R
 import com.reader.app.ui.theme.AccentGold
 import com.reader.app.ui.theme.AccentGoldLight
 import com.reader.app.ui.theme.BookshelfBackground
@@ -119,7 +124,7 @@ fun BookshelfScreen(
                             imageVector = Icons.AutoMirrored.Filled.MenuBook,
                             contentDescription = null,
                             tint = AccentGold,
-                            modifier = Modifier.size(26.dp)
+                            modifier = Modifier.size(22.dp)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
@@ -138,31 +143,6 @@ fun BookshelfScreen(
                                 )
                             }
                         }
-                    }
-                },
-                actions = {
-                    Button(
-                        onClick = {
-                            pdfPickerLauncher.launch(arrayOf("application/pdf"))
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = AccentGold,
-                            contentColor = Color(0xFF23160D)
-                        ),
-                        shape = RoundedCornerShape(18.dp),
-                        modifier = Modifier.padding(end = 8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "Import PDF",
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "Import PDF",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -184,7 +164,7 @@ fun BookshelfScreen(
                         modifier = Modifier.padding(horizontal = 14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = "Add")
+                        Icon(Icons.Default.Add, contentDescription = "Add", modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Add Book", fontWeight = FontWeight.Bold)
                     }
@@ -197,16 +177,22 @@ fun BookshelfScreen(
             modifier = modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFF291A13),
-                            Color(0xFF1E130E),
-                            Color(0xFF160E0A)
-                        )
+                .background(Color(0xFF21140E))
+        ) {
+            Image(
+                painter = painterResource(R.drawable.wood_texture),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                drawRect(Color(0x330C0704))
+                drawRect(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(Color(0x05000000), Color(0x44000000))
                     )
                 )
-        ) {
+            }
             if (isImporting) {
                 // Loading overlay while parsing PDF & creating thumbnail
                 Box(
@@ -409,7 +395,7 @@ fun EmptyBookshelfView(
                 imageVector = Icons.AutoMirrored.Outlined.LibraryBooks,
                 contentDescription = null,
                 tint = AccentGold,
-                modifier = Modifier.size(52.dp)
+                modifier = Modifier.size(44.dp)
             )
         }
 

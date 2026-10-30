@@ -8,6 +8,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -58,13 +59,15 @@ class MainActivity : ComponentActivity() {
                 ) {
                     val activeBook = currentBook
                     if (activeBook != null) {
-                        PdfReaderScreen(
-                            book = activeBook,
-                            repository = repository,
-                            onBack = {
-                                currentBook = null
-                            }
-                        )
+                        key(activeBook.id) {
+                            PdfReaderScreen(
+                                book = activeBook,
+                                repository = repository,
+                                onBack = {
+                                    currentBook = null
+                                }
+                            )
+                        }
                     } else {
                         BookshelfScreen(
                             repository = repository,

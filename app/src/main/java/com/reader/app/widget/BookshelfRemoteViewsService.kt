@@ -17,12 +17,17 @@ import java.io.FileReader
 
 class BookshelfRemoteViewsService : RemoteViewsService() {
     override fun onGetViewFactory(intent: Intent): RemoteViewsFactory {
-        return BookshelfRemoteViewsFactory(applicationContext)
+        val widgetId = intent.getIntExtra(
+            android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_ID,
+            android.appwidget.AppWidgetManager.INVALID_APPWIDGET_ID
+        )
+        return BookshelfRemoteViewsFactory(applicationContext, widgetId)
     }
 }
 
 class BookshelfRemoteViewsFactory(
-    private val context: Context
+    private val context: Context,
+    private val widgetId: Int
 ) : RemoteViewsService.RemoteViewsFactory {
 
     private val gson = Gson()
@@ -63,31 +68,51 @@ class BookshelfRemoteViewsFactory(
         booksList = emptyList()
     }
 
-    override fun getCount(): Int = booksList.size
+    private fun columnCount(): Int {
+        if (widgetId == android.appwidget.AppWidgetManager.INVALID_APPWIDGET_ID) return 1
+        val manager = android.appwidget.AppWidgetManager.getInstance(context)
+        val options = manager.getAppWidgetOptions(widgetId)
+        val widthDp = options.getInt(android.appwidget.AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 180)
+        val availableWidth = (widthDp - 16).coerceAtLeast(85)
+        return (availableWidth / 85).coerceIn(1, 8)
+    }
+
+    override fun getCount(): Int {
+        if (booksList.isEmpty()) return 0
+        val columns = columnCount()
+        return ((booksList.size + columns - 1) / columns) * columns
+    }
 
     override fun getViewAt(position: Int): RemoteViews? {
         val identityToken = android.os.Binder.clearCallingIdentity()
         try {
-            if (position < 0 || position >= booksList.size) return null
+            val rv = RemoteViews(context.packageName, R.layout.bookshelf_widget_item)
+
+            // Fill unused cells in the last grid row with invisible books so that
+            // their full-width shelf ledges join the ledge beneath the real covers.
+            if (position < 0 || position >= booksList.size) {
+                rv.setViewVisibility(R.id.widget_book_frame_container, android.view.View.INVISIBLE)
+                rv.setViewVisibility(R.id.widget_book_progress_bar, android.view.View.GONE)
+                rv.setViewVisibility(R.id.widget_book_title, android.view.View.INVISIBLE)
+                return rv
+            }
 
             val book = booksList[position]
-            val rv = RemoteViews(context.packageName, R.layout.bookshelf_widget_item)
 
             // Set title
             rv.setTextViewText(R.id.widget_book_title, book.title)
 
             // Set progress
-            if (book.pageCount > 0 && book.currentPage > 0) {
-                rv.setTextViewText(
-                    R.id.widget_book_progress,
-                    "p. ${book.currentPage + 1}/${book.pageCount} (${book.progressPercentage}%)"
+            if (book.pageCount > 0) {
+                rv.setProgressBar(
+                    R.id.widget_book_progress_bar,
+                    100,
+                    book.progressPercentage,
+                    false
                 )
-                rv.setViewVisibility(R.id.widget_book_progress, android.view.View.VISIBLE)
-            } else if (book.pageCount > 0) {
-                rv.setTextViewText(R.id.widget_book_progress, "${book.pageCount} pages")
-                rv.setViewVisibility(R.id.widget_book_progress, android.view.View.VISIBLE)
+                rv.setViewVisibility(R.id.widget_book_progress_bar, android.view.View.VISIBLE)
             } else {
-                rv.setViewVisibility(R.id.widget_book_progress, android.view.View.GONE)
+                rv.setViewVisibility(R.id.widget_book_progress_bar, android.view.View.GONE)
             }
 
             // Load thumbnail safely scaled for RemoteViews memory limit
