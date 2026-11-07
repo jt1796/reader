@@ -140,3 +140,5 @@ This project checks in `signing.properties` and `app/reader-release.jks` so rele
 ```
 
 The signed APK will be at `app/build/outputs/apk/release/app-release.apk`. The build also accepts the equivalent environment variables `READER_KEYSTORE`, `READER_STORE_PASSWORD`, `READER_KEY_ALIAS`, and `READER_KEY_PASSWORD`.
+
+Android only allows an APK to update an installed app when both are signed with the same key. If an existing installation was signed with a different keystore, this APK cannot update it in place. Keep using that original keystore to preserve in-place upgrades, or uninstall the existing app before installing this build (uninstalling may remove its app data).
