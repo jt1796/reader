@@ -23,7 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronLeft
@@ -77,7 +77,7 @@ import kotlinx.coroutines.launch
 fun PdfPaneView(
     paneIndex: Int,
     paneTitle: String,
-    initialPage: Int,
+    listState: LazyListState,
     totalPages: Int,
     pdfManager: PdfManager,
     canClose: Boolean,
@@ -91,14 +91,6 @@ fun PdfPaneView(
     // Zoom and pan state
     var scale by remember { mutableFloatStateOf(1f) }
     var panOffset by remember { mutableStateOf(Offset.Zero) }
-
-    val safeInitialPage = remember(initialPage, totalPages) {
-        initialPage.coerceIn(0, (totalPages - 1).coerceAtLeast(0))
-    }
-
-    val listState = rememberLazyListState(
-        initialFirstVisibleItemIndex = safeInitialPage
-    )
 
     // Notify whenever the current visible page changes during continuous vertical scrolling
     LaunchedEffect(listState) {

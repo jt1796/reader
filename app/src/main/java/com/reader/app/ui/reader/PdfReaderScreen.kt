@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -100,6 +101,9 @@ fun PdfReaderScreen(
     var pane3Page by remember {
         mutableIntStateOf(if (book.isPane3Open && book.pane3Page == 0) book.currentPage else book.pane3Page)
     }
+    val pane1ListState = rememberLazyListState(initialFirstVisibleItemIndex = pane1Page)
+    val pane2ListState = rememberLazyListState(initialFirstVisibleItemIndex = pane2Page)
+    val pane3ListState = rememberLazyListState(initialFirstVisibleItemIndex = pane3Page)
 
     // Draggable split ratios
     var splitRatioPrimary by remember { mutableFloatStateOf(book.splitRatioPrimary.coerceIn(0.2f, 0.8f)) }
@@ -210,7 +214,10 @@ fun PdfReaderScreen(
                             val newOpen = !isPane2Open
                             if (newOpen && pane2Page == 0) {
                                 pane2Page = pane1Page
-                                scope.launch { repository.updatePaneProgress(book.id, 2, pane1Page) }
+                                scope.launch {
+                                    pane2ListState.scrollToItem(pane1Page)
+                                    repository.updatePaneProgress(book.id, 2, pane1Page)
+                                }
                             }
                             isPane2Open = newOpen
                             scope.launch {
@@ -249,7 +256,10 @@ fun PdfReaderScreen(
                             val newOpen = !isPane3Open
                             if (newOpen && pane3Page == 0) {
                                 pane3Page = pane1Page
-                                scope.launch { repository.updatePaneProgress(book.id, 3, pane1Page) }
+                                scope.launch {
+                                    pane3ListState.scrollToItem(pane1Page)
+                                    repository.updatePaneProgress(book.id, 3, pane1Page)
+                                }
                             }
                             isPane3Open = newOpen
                             scope.launch {
@@ -307,7 +317,7 @@ fun PdfReaderScreen(
                     PdfPaneView(
                         paneIndex = 1,
                         paneTitle = "Main Text",
-                        initialPage = pane1Page,
+                        listState = pane1ListState,
                         totalPages = totalPages,
                         pdfManager = pdfManager,
                         canClose = false,
@@ -324,7 +334,6 @@ fun PdfReaderScreen(
                 (hasPane2 && !hasPane3) || (!hasPane2 && hasPane3) -> {
                     val secondaryIndex = if (hasPane2) 2 else 3
                     val secondaryTitle = if (hasPane2) "2nd View" else "3rd View"
-                    val secondaryPage = if (hasPane2) pane2Page else pane3Page
 
                     if (isLandscape) {
                         // Landscape: One tall view on the left, 2nd view on the right
@@ -338,7 +347,7 @@ fun PdfReaderScreen(
                                 PdfPaneView(
                                     paneIndex = 1,
                                     paneTitle = "Main Text",
-                                    initialPage = pane1Page,
+                                    listState = pane1ListState,
                                     totalPages = totalPages,
                                     pdfManager = pdfManager,
                                     canClose = false,
@@ -371,7 +380,7 @@ fun PdfReaderScreen(
                                 PdfPaneView(
                                     paneIndex = secondaryIndex,
                                     paneTitle = secondaryTitle,
-                                    initialPage = secondaryPage,
+                                    listState = if (secondaryIndex == 2) pane2ListState else pane3ListState,
                                     totalPages = totalPages,
                                     pdfManager = pdfManager,
                                     canClose = true,
@@ -404,7 +413,7 @@ fun PdfReaderScreen(
                                 PdfPaneView(
                                     paneIndex = 1,
                                     paneTitle = "Main Text",
-                                    initialPage = pane1Page,
+                                    listState = pane1ListState,
                                     totalPages = totalPages,
                                     pdfManager = pdfManager,
                                     canClose = false,
@@ -437,7 +446,7 @@ fun PdfReaderScreen(
                                 PdfPaneView(
                                     paneIndex = secondaryIndex,
                                     paneTitle = secondaryTitle,
-                                    initialPage = secondaryPage,
+                                    listState = if (secondaryIndex == 2) pane2ListState else pane3ListState,
                                     totalPages = totalPages,
                                     pdfManager = pdfManager,
                                     canClose = true,
@@ -477,7 +486,7 @@ fun PdfReaderScreen(
                                 PdfPaneView(
                                     paneIndex = 1,
                                     paneTitle = "Main Text",
-                                    initialPage = pane1Page,
+                                    listState = pane1ListState,
                                     totalPages = totalPages,
                                     pdfManager = pdfManager,
                                     canClose = false,
@@ -516,7 +525,7 @@ fun PdfReaderScreen(
                                     PdfPaneView(
                                         paneIndex = 2,
                                         paneTitle = "2nd View",
-                                        initialPage = pane2Page,
+                                        listState = pane2ListState,
                                         totalPages = totalPages,
                                         pdfManager = pdfManager,
                                         canClose = true,
@@ -555,7 +564,7 @@ fun PdfReaderScreen(
                                     PdfPaneView(
                                         paneIndex = 3,
                                         paneTitle = "3rd View",
-                                        initialPage = pane3Page,
+                                        listState = pane3ListState,
                                         totalPages = totalPages,
                                         pdfManager = pdfManager,
                                         canClose = true,
@@ -590,7 +599,7 @@ fun PdfReaderScreen(
                                 PdfPaneView(
                                     paneIndex = 1,
                                     paneTitle = "Main Text",
-                                    initialPage = pane1Page,
+                                    listState = pane1ListState,
                                     totalPages = totalPages,
                                     pdfManager = pdfManager,
                                     canClose = false,
@@ -624,7 +633,7 @@ fun PdfReaderScreen(
                                 PdfPaneView(
                                     paneIndex = 2,
                                     paneTitle = "2nd View",
-                                    initialPage = pane2Page,
+                                    listState = pane2ListState,
                                     totalPages = totalPages,
                                     pdfManager = pdfManager,
                                     canClose = true,
@@ -664,7 +673,7 @@ fun PdfReaderScreen(
                                 PdfPaneView(
                                     paneIndex = 3,
                                     paneTitle = "3rd View",
-                                    initialPage = pane3Page,
+                                    listState = pane3ListState,
                                     totalPages = totalPages,
                                     pdfManager = pdfManager,
                                     canClose = true,
