@@ -1,8 +1,18 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+val signingProperties = Properties().apply {
+    val propertiesFile = rootProject.file("signing.properties")
+    if (propertiesFile.exists()) propertiesFile.inputStream().use { load(it) }
+}
+
+fun signingValue(name: String): String? =
+    providers.environmentVariable(name).orNull ?: signingProperties.getProperty(name.lowercase().replace('_', '.'))
 
 android {
     namespace = "com.reader.app"
@@ -20,6 +30,19 @@ android {
 
     buildTypes {
         release {
+            val keystorePath = signingValue("READER_KEYSTORE")
+            val keystorePassword = signingValue("READER_STORE_PASSWORD")
+            val keyAlias = signingValue("READER_KEY_ALIAS")
+            val keyPassword = signingValue("READER_KEY_PASSWORD")
+
+            if (keystorePath != null && keystorePassword != null && keyAlias != null && keyPassword != null) {
+                signingConfig = signingConfigs.create("release") {
+                    storeFile = rootProject.file(keystorePath)
+                    storePassword = keystorePassword
+                    this.keyAlias = keyAlias
+                    this.keyPassword = keyPassword
+                }
+            }
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

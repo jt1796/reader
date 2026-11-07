@@ -112,3 +112,31 @@ reader/
 
 The compiled APK will be located at:
 `app/build/outputs/apk/debug/app-debug.apk`
+
+### Build a signed release APK from the CLI
+
+Create a release keystore once (keytool will prompt for passwords and certificate details):
+
+```bash
+keytool -genkeypair -v \
+  -keystore app/reader-release.jks \
+  -alias reader \
+  -keyalg RSA -keysize 2048 -validity 10000
+```
+
+Create `signing.properties` in the project root with the keystore path and the passwords you entered:
+
+```properties
+reader.keystore=app/reader-release.jks
+reader.store.password=YOUR_KEYSTORE_PASSWORD
+reader.key.alias=reader
+reader.key.password=YOUR_KEY_PASSWORD
+```
+
+This project checks in `signing.properties` and `app/reader-release.jks` so release builds work after cloning the repository. The signing key is intended only for this private app; use a different key if you ever publish through Google Play. Then build the signed APK:
+
+```bash
+./gradlew assembleRelease
+```
+
+The signed APK will be at `app/build/outputs/apk/release/app-release.apk`. The build also accepts the equivalent environment variables `READER_KEYSTORE`, `READER_STORE_PASSWORD`, `READER_KEY_ALIAS`, and `READER_KEY_PASSWORD`.
