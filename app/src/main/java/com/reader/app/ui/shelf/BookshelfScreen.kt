@@ -24,10 +24,13 @@ import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.outlined.LibraryBooks
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -84,9 +87,34 @@ fun BookshelfScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     var isImporting by remember { mutableStateOf(false) }
+    var busyMessage by remember { mutableStateOf("Working...") }
+    var backupToRestore by remember { mutableStateOf<Uri?>(null) }
+    var showShelfMenu by remember { mutableStateOf(false) }
     var bookToRename by remember { mutableStateOf<Book?>(null) }
     var renameInput by remember { mutableStateOf("") }
     var bookToDelete by remember { mutableStateOf<Book?>(null) }
+
+    val backupExportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        if (uri != null) {
+            isImporting = true
+            busyMessage = "Creating bookshelf backup..."
+            scope.launch {
+                val result = repository.exportBackup(uri)
+                isImporting = false
+                result.onSuccess { count ->
+                    snackbarHostState.showSnackbar("Backup exported with $count ${if (count == 1) "book" else "books"}")
+                }.onFailure { error ->
+                    snackbarHostState.showSnackbar("Backup export failed: ${error.message ?: "unknown error"}")
+                }
+            }
+        }
+    }
+
+    val backupImportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri -> backupToRestore = uri }
 
     // SAF File Picker for PDF documents
     val pdfPickerLauncher = rememberLauncherForActivityResult(
@@ -94,6 +122,7 @@ fun BookshelfScreen(
     ) { uris: List<Uri>? ->
         if (!uris.isNullOrEmpty()) {
             isImporting = true
+            busyMessage = "Importing book to shelf..."
             scope.launch {
                 var importedCount = 0
                 for (uri in uris) {
@@ -142,6 +171,32 @@ fun BookshelfScreen(
                                     fontSize = 11.sp
                                 )
                             }
+                        }
+                    }
+                },
+                actions = {
+                    Box {
+                        IconButton(onClick = { showShelfMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Bookshelf options", tint = Color.White)
+                        }
+                        DropdownMenu(
+                            expanded = showShelfMenu,
+                            onDismissRequest = { showShelfMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Export Backup") },
+                                onClick = {
+                                    showShelfMenu = false
+                                    backupExportLauncher.launch("Bookshelf-Backup.zip")
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Import Backup") },
+                                onClick = {
+                                    showShelfMenu = false
+                                    backupImportLauncher.launch(arrayOf("application/zip", "application/octet-stream"))
+                                }
+                            )
                         }
                     }
                 },
@@ -210,7 +265,7 @@ fun BookshelfScreen(
                         CircularProgressIndicator(color = AccentGold)
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "Importing book to shelf...",
+                            text = busyMessage,
                             color = Color.White,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -289,6 +344,46 @@ fun BookshelfScreen(
                 }
             }
         }
+    }
+
+    backupToRestore?.let { backupUri ->
+        AlertDialog(
+            onDismissRequest = { backupToRestore = null },
+            title = { Text("Restore Bookshelf Backup?", color = Color.White) },
+            text = {
+                Text(
+                    "Restoring this backup replaces your current bookshelf, documents, reading history, and view settings.",
+                    color = Color(0xFFE2D6CB)
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        backupToRestore = null
+                        isImporting = true
+                        busyMessage = "Restoring bookshelf backup..."
+                        scope.launch {
+                            val result = repository.importBackup(backupUri)
+                            isImporting = false
+                            result.onSuccess { count ->
+                                snackbarHostState.showSnackbar("Restored $count ${if (count == 1) "book" else "books"}")
+                            }.onFailure { error ->
+                                snackbarHostState.showSnackbar("Backup restore failed: ${error.message ?: "unknown error"}")
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentGold)
+                ) {
+                    Text("Restore", color = Color.Black)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { backupToRestore = null }) {
+                    Text("Cancel", color = Color(0xFFDDD2C6))
+                }
+            },
+            containerColor = ShelfWoodDark
+        )
     }
 
     // Rename Dialog

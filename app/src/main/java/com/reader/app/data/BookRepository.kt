@@ -20,6 +20,15 @@ import java.io.FileOutputStream
 import java.io.FileReader
 import java.io.FileWriter
 import java.util.UUID
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
+
+private data class LibraryBackupManifest(
+    val format: String = "reader-library-backup",
+    val version: Int = 1,
+    val bookCount: Int
+)
 
 class BookRepository(private val context: Context) {
 
@@ -76,6 +85,200 @@ class BookRepository(private val context: Context) {
 
     fun getBook(id: String): Book? {
         return _books.value.find { it.id == id }
+    }
+
+    /** Writes books, PDFs, covers, reading history, and pane configuration to one ZIP backup. */
+    suspend fun exportBackup(uri: Uri): Result<Int> = withContext(Dispatchers.IO) {
+        runCatching {
+            val currentBooks = _books.value.toList()
+            val output = context.contentResolver.openOutputStream(uri, "w")
+                ?: throw IllegalStateException("Could not open backup destination")
+
+            ZipOutputStream(output.buffered()).use { zip ->
+                zip.putNextEntry(ZipEntry("backup.json"))
+                zip.write(gson.toJson(LibraryBackupManifest(bookCount = currentBooks.size)).toByteArray(Charsets.UTF_8))
+                zip.closeEntry()
+
+                zip.putNextEntry(ZipEntry("books_metadata.json"))
+                zip.write(gson.toJson(currentBooks).toByteArray(Charsets.UTF_8))
+                zip.closeEntry()
+
+                for (book in currentBooks) {
+                    require(book.id.matches(Regex("[A-Za-z0-9_-]{1,128}"))) { "Invalid book ID in library" }
+                    val pdf = File(book.filePath)
+                    require(pdf.isFile) { "Missing PDF for ${book.title}" }
+
+                    zip.putNextEntry(ZipEntry("books/${book.id}.pdf"))
+                    pdf.inputStream().buffered().use { it.copyTo(zip) }
+                    zip.closeEntry()
+
+                    val cover = File(book.coverPath)
+                    if (cover.isFile) {
+                        zip.putNextEntry(ZipEntry("covers/${book.id}.png"))
+                        cover.inputStream().buffered().use { it.copyTo(zip) }
+                        zip.closeEntry()
+                    }
+                }
+            }
+            currentBooks.size
+        }
+    }
+
+    /** Validates and restores a complete backup, replacing the current bookshelf only after staging succeeds. */
+    suspend fun importBackup(uri: Uri): Result<Int> = withContext(Dispatchers.IO) {
+        runCatching {
+            val stagingRoot = File(context.filesDir, ".restore-${UUID.randomUUID()}").apply {
+                check(mkdirs()) { "Could not create restore staging folder" }
+            }
+            try {
+                val stagedBooks = File(stagingRoot, "books").apply { mkdirs() }
+                val stagedCovers = File(stagingRoot, "covers").apply { mkdirs() }
+                var metadataJson: String? = null
+                var manifest: LibraryBackupManifest? = null
+                var expandedBytes = 0L
+                val seenEntries = mutableSetOf<String>()
+                val input = context.contentResolver.openInputStream(uri)
+                    ?: throw IllegalStateException("Could not open backup file")
+
+                ZipInputStream(input.buffered()).use { zip ->
+                    while (true) {
+                        val entry = zip.nextEntry ?: break
+                        if (entry.isDirectory) {
+                            zip.closeEntry()
+                            continue
+                        }
+                        require(seenEntries.add(entry.name)) { "Backup contains duplicate entries" }
+                        when {
+                            entry.name == "backup.json" -> {
+                                val data = zip.readBytesLimited(1024 * 1024)
+                                manifest = gson.fromJson(String(data, Charsets.UTF_8), LibraryBackupManifest::class.java)
+                            }
+                            entry.name == "books_metadata.json" -> {
+                                metadataJson = String(zip.readBytesLimited(32 * 1024 * 1024), Charsets.UTF_8)
+                            }
+                            entry.name.matches(Regex("books/[A-Za-z0-9_-]{1,128}\\.pdf")) -> {
+                                val destination = File(stagedBooks, entry.name.substringAfter("books/"))
+                                expandedBytes += zip.copyToLimited(destination)
+                            }
+                            entry.name.matches(Regex("covers/[A-Za-z0-9_-]{1,128}\\.png")) -> {
+                                val destination = File(stagedCovers, entry.name.substringAfter("covers/"))
+                                expandedBytes += zip.copyToLimited(destination)
+                            }
+                            else -> throw IllegalArgumentException("Unsupported backup entry: ${entry.name}")
+                        }
+                        require(expandedBytes <= MAX_BACKUP_BYTES) { "Backup is too large" }
+                        zip.closeEntry()
+                    }
+                }
+
+                val validManifest = requireNotNull(manifest) { "Backup manifest is missing" }
+                require(validManifest.format == "reader-library-backup" && validManifest.version == 1) {
+                    "Unsupported backup format"
+                }
+                val json = requireNotNull(metadataJson) { "Bookshelf data is missing" }
+                val bookType = object : TypeToken<List<Book>>() {}.type
+                val importedBooks: List<Book> = requireNotNull(gson.fromJson(json, bookType)) { "Bookshelf data is invalid" }
+                require(importedBooks.size == validManifest.bookCount) { "Backup book count does not match" }
+                require(importedBooks.map { it.id }.distinct().size == importedBooks.size) { "Backup contains duplicate book IDs" }
+
+                val restoredBooks = importedBooks.map { book ->
+                    require(book.id.matches(Regex("[A-Za-z0-9_-]{1,128}"))) { "Backup contains an invalid book ID" }
+                    val pdf = File(stagedBooks, "${book.id}.pdf")
+                    require(pdf.isFile && pdf.length() > 0L) { "Backup is missing a PDF for ${book.title}" }
+                    book.copy(
+                        filePath = File(booksDir, "${book.id}.pdf").absolutePath,
+                        coverPath = File(coversDir, "${book.id}.png").absolutePath
+                    )
+                }
+
+                val nextBooksDir = File(stagingRoot, "books-next")
+                val nextCoversDir = File(stagingRoot, "covers-next")
+                check(stagedBooks.renameTo(nextBooksDir)) { "Could not prepare restored PDFs" }
+                check(stagedCovers.renameTo(nextCoversDir)) { "Could not prepare restored covers" }
+                val nextMetadata = File(stagingRoot, "books_metadata.json")
+                FileWriter(nextMetadata).use { gson.toJson(restoredBooks, it) }
+
+                synchronized(this@BookRepository) {
+                    installRestoredLibrary(stagingRoot, nextBooksDir, nextCoversDir, nextMetadata, restoredBooks)
+                }
+                restoredBooks.size
+            } finally {
+                stagingRoot.deleteRecursively()
+            }
+        }
+    }
+
+    private fun installRestoredLibrary(
+        stagingRoot: File,
+        nextBooksDir: File,
+        nextCoversDir: File,
+        nextMetadata: File,
+        restoredBooks: List<Book>
+    ) {
+        val oldBooksDir = File(stagingRoot, "books-old")
+        val oldCoversDir = File(stagingRoot, "covers-old")
+        val oldMetadata = File(stagingRoot, "books_metadata-old.json")
+        var oldBooksMoved = false
+        var oldCoversMoved = false
+        var oldMetadataMoved = false
+        var newBooksInstalled = false
+        var newCoversInstalled = false
+        var newMetadataInstalled = false
+        try {
+            check(booksDir.renameTo(oldBooksDir)) { "Could not stage the current PDFs" }
+            oldBooksMoved = true
+            check(coversDir.renameTo(oldCoversDir)) { "Could not stage the current covers" }
+            oldCoversMoved = true
+            check(nextBooksDir.renameTo(booksDir)) { "Could not install restored PDFs" }
+            newBooksInstalled = true
+            check(nextCoversDir.renameTo(coversDir)) { "Could not install restored covers" }
+            newCoversInstalled = true
+            if (booksFile.exists()) {
+                check(booksFile.renameTo(oldMetadata)) { "Could not stage current bookshelf data" }
+                oldMetadataMoved = true
+            }
+            check(nextMetadata.renameTo(booksFile)) { "Could not install restored bookshelf data" }
+            newMetadataInstalled = true
+            _books.value = restoredBooks.sortedByDescending { it.lastReadTimestamp }
+            notifyWidgetUpdated()
+        } catch (error: Throwable) {
+            if (newMetadataInstalled) booksFile.delete()
+            if (oldMetadataMoved) oldMetadata.renameTo(booksFile)
+            if (newCoversInstalled) coversDir.deleteRecursively()
+            if (newBooksInstalled) booksDir.deleteRecursively()
+            if (oldCoversMoved) oldCoversDir.renameTo(coversDir)
+            if (oldBooksMoved) oldBooksDir.renameTo(booksDir)
+            throw error
+        }
+    }
+
+    private fun ZipInputStream.readBytesLimited(limit: Int): ByteArray {
+        val output = java.io.ByteArrayOutputStream()
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        var total = 0
+        while (true) {
+            val count = read(buffer)
+            if (count < 0) break
+            total += count
+            require(total <= limit) { "Backup metadata is too large" }
+            output.write(buffer, 0, count)
+        }
+        return output.toByteArray()
+    }
+
+    private fun ZipInputStream.copyToLimited(destination: File): Long {
+        var total = 0L
+        destination.outputStream().buffered().use { output ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val count = read(buffer)
+                if (count < 0) break
+                total += count
+                require(total <= MAX_BACKUP_BYTES) { "Backup entry is too large" }
+                output.write(buffer, 0, count)
+            }
+        }
+        return total
     }
 
     /** Applies a metadata change against the latest list so concurrent page updates cannot overwrite each other. */
@@ -316,6 +519,8 @@ class BookRepository(private val context: Context) {
     }
 
     companion object {
+        private const val MAX_BACKUP_BYTES = 8L * 1024 * 1024 * 1024
+
         @Volatile
         private var INSTANCE: BookRepository? = null
 
