@@ -81,7 +81,7 @@ class BookshelfRemoteViewsFactory(
         }
         val widthDp = options.getInt(widthKey, 180)
         val availableWidth = (widthDp - 16).coerceAtLeast(85)
-        return (availableWidth / 85).coerceIn(1, 8)
+        return (availableWidth / 85).coerceAtLeast(1)
     }
 
     private fun visibleRowCount(): Int {
