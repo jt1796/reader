@@ -115,30 +115,12 @@ The compiled APK will be located at:
 
 ### Build a signed release APK from the CLI
 
-Create a release keystore once (keytool will prompt for passwords and certificate details):
-
-```bash
-keytool -genkeypair -v \
-  -keystore app/reader-release.jks \
-  -alias reader \
-  -keyalg RSA -keysize 2048 -validity 10000
-```
-
-Create `signing.properties` in the project root with the keystore path and the passwords you entered:
-
-```properties
-reader.keystore=app/reader-release.jks
-reader.store.password=YOUR_KEYSTORE_PASSWORD
-reader.key.alias=reader
-reader.key.password=YOUR_KEY_PASSWORD
-```
-
-This project checks in `signing.properties` and `app/reader-release.jks` so release builds work after cloning the repository. The signing key is intended only for this private app; use a different key if you ever publish through Google Play. Then build the signed APK:
+This project checks in `signing.properties` and `app/reader-release.jks`, including the signing password, so no key generation or password entry is needed to build. The signing key is intended only for this private app; use a different key if you ever publish through Google Play. Build the signed APK with:
 
 ```bash
 ./gradlew assembleRelease
 ```
 
-The signed APK will be at `app/build/outputs/apk/release/app-release.apk`. The build also accepts the equivalent environment variables `READER_KEYSTORE`, `READER_STORE_PASSWORD`, `READER_KEY_ALIAS`, and `READER_KEY_PASSWORD`.
+The signed APK will be at `app/build/outputs/apk/release/app-release.apk`. If you replace the checked-in signing configuration, the build also accepts the environment variables `READER_KEYSTORE`, `READER_STORE_PASSWORD`, `READER_KEY_ALIAS`, and `READER_KEY_PASSWORD`.
 
 Android only allows an APK to update an installed app when both are signed with the same key. If an existing installation was signed with a different keystore, this APK cannot update it in place. Keep using that original keystore to preserve in-place upgrades, or uninstall the existing app before installing this build (uninstalling may remove its app data).
