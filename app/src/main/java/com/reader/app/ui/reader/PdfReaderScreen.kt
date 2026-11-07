@@ -94,8 +94,12 @@ fun PdfReaderScreen(
 
     // Independent page positions per pane
     var pane1Page by remember { mutableIntStateOf(book.currentPage) }
-    var pane2Page by remember { mutableIntStateOf(book.pane2Page) }
-    var pane3Page by remember { mutableIntStateOf(book.pane3Page) }
+    var pane2Page by remember {
+        mutableIntStateOf(if (book.isPane2Open && book.pane2Page == 0) book.currentPage else book.pane2Page)
+    }
+    var pane3Page by remember {
+        mutableIntStateOf(if (book.isPane3Open && book.pane3Page == 0) book.currentPage else book.pane3Page)
+    }
 
     // Draggable split ratios
     var splitRatioPrimary by remember { mutableFloatStateOf(book.splitRatioPrimary.coerceIn(0.2f, 0.8f)) }
@@ -204,6 +208,10 @@ fun PdfReaderScreen(
                         selected = isPane2Open,
                         onClick = {
                             val newOpen = !isPane2Open
+                            if (newOpen && pane2Page == 0) {
+                                pane2Page = pane1Page
+                                scope.launch { repository.updatePaneProgress(book.id, 2, pane1Page) }
+                            }
                             isPane2Open = newOpen
                             scope.launch {
                                 repository.updatePaneState(book.id, newOpen, isPane3Open)
@@ -239,6 +247,10 @@ fun PdfReaderScreen(
                         selected = isPane3Open,
                         onClick = {
                             val newOpen = !isPane3Open
+                            if (newOpen && pane3Page == 0) {
+                                pane3Page = pane1Page
+                                scope.launch { repository.updatePaneProgress(book.id, 3, pane1Page) }
+                            }
                             isPane3Open = newOpen
                             scope.launch {
                                 repository.updatePaneState(book.id, isPane2Open, newOpen)
@@ -311,7 +323,7 @@ fun PdfReaderScreen(
                 // -------------------------------------------------------------
                 (hasPane2 && !hasPane3) || (!hasPane2 && hasPane3) -> {
                     val secondaryIndex = if (hasPane2) 2 else 3
-                    val secondaryTitle = if (hasPane2) "2nd View - Exercises" else "3rd View - Solutions"
+                    val secondaryTitle = if (hasPane2) "2nd View" else "3rd View"
                     val secondaryPage = if (hasPane2) pane2Page else pane3Page
 
                     if (isLandscape) {
@@ -370,7 +382,11 @@ fun PdfReaderScreen(
                                         }
                                     },
                                     onPageChanged = { page ->
-                                        if (secondaryIndex == 2) pane2Page = page else pane3Page = page
+                                        if (secondaryIndex == 2) {
+                                            pane2Page = page
+                                        } else {
+                                            pane3Page = page
+                                        }
                                         scope.launch { repository.updatePaneProgress(book.id, secondaryIndex, page) }
                                     }
                                 )
@@ -432,7 +448,11 @@ fun PdfReaderScreen(
                                         }
                                     },
                                     onPageChanged = { page ->
-                                        if (secondaryIndex == 2) pane2Page = page else pane3Page = page
+                                        if (secondaryIndex == 2) {
+                                            pane2Page = page
+                                        } else {
+                                            pane3Page = page
+                                        }
                                         scope.launch { repository.updatePaneProgress(book.id, secondaryIndex, page) }
                                     }
                                 )
@@ -495,7 +515,7 @@ fun PdfReaderScreen(
                                 ) {
                                     PdfPaneView(
                                         paneIndex = 2,
-                                        paneTitle = "2nd View - Exercises",
+                                        paneTitle = "2nd View",
                                         initialPage = pane2Page,
                                         totalPages = totalPages,
                                         pdfManager = pdfManager,
@@ -534,7 +554,7 @@ fun PdfReaderScreen(
                                 ) {
                                     PdfPaneView(
                                         paneIndex = 3,
-                                        paneTitle = "3rd View - Solutions",
+                                        paneTitle = "3rd View",
                                         initialPage = pane3Page,
                                         totalPages = totalPages,
                                         pdfManager = pdfManager,
@@ -603,7 +623,7 @@ fun PdfReaderScreen(
                             ) {
                                 PdfPaneView(
                                     paneIndex = 2,
-                                    paneTitle = "2nd View - Exercises",
+                                    paneTitle = "2nd View",
                                     initialPage = pane2Page,
                                     totalPages = totalPages,
                                     pdfManager = pdfManager,
@@ -643,7 +663,7 @@ fun PdfReaderScreen(
                             ) {
                                 PdfPaneView(
                                     paneIndex = 3,
-                                    paneTitle = "3rd View - Solutions",
+                                    paneTitle = "3rd View",
                                     initialPage = pane3Page,
                                     totalPages = totalPages,
                                     pdfManager = pdfManager,

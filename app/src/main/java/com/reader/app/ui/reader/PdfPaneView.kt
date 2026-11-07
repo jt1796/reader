@@ -158,7 +158,7 @@ fun PdfPaneView(
                     )
 
                     // Zoom indicator badge when zoomed in
-                    if (scale > 1.05f) {
+                    if (kotlin.math.abs(scale - 1f) > 0.05f) {
                         Spacer(modifier = Modifier.width(8.dp))
                         Box(
                             modifier = Modifier
@@ -177,7 +177,7 @@ fun PdfPaneView(
 
                 // Controls: Previous, Slider toggle, Next, Close
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (scale > 1.05f) {
+                    if (kotlin.math.abs(scale - 1f) > 0.05f) {
                         IconButton(
                             onClick = {
                                 scale = 1f
@@ -296,7 +296,7 @@ fun PdfPaneView(
                 .weight(1f)
                 .background(Color(0xFF1E1E1E))
                 .pointerInput(Unit) {
-                    // Double tap to toggle zoom between 1x and 2.2x
+                    // Double tap to toggle zoom between fit width and 2.2x
                     detectTapGestures(
                         onDoubleTap = {
                             if (scale > 1.2f) {
@@ -311,7 +311,7 @@ fun PdfPaneView(
                 .pointerInput(Unit) {
                     // Pinch to zoom and 2D pan
                     detectTransformGestures { _, pan, zoom, _ ->
-                        val newScale = (scale * zoom).coerceIn(1f, 4.5f)
+                        val newScale = (scale * zoom).coerceIn(0.5f, 4.5f)
                         scale = newScale
 
                         if (newScale > 1.05f) {
